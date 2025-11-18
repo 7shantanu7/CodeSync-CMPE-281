@@ -19,6 +19,158 @@ A production-ready, real-time collaborative code editor built with modern web te
 
 ![Infrastructure Architecture Diagram](images/Infrastructure%20Architecture%20Diagram.png)
 
+## ☁️ AWS Cloud Architecture
+
+This project leverages multiple AWS services to create a highly available, scalable, and resilient cloud infrastructure:
+
+### Compute Services
+
+**Amazon ECS (Elastic Container Service) with Fargate**
+- Serverless container orchestration service
+- Runs API and WebSocket services as Docker containers
+- Fargate eliminates need to manage EC2 instances
+- Auto-scaling based on CPU/Memory metrics (2-10 tasks per service)
+- Deployed across 2 Availability Zones for high availability
+
+**Application Load Balancer (ALB)**
+- Layer 7 load balancer distributing traffic to ECS tasks
+- Health checks every 30 seconds to ensure task availability
+- Sticky sessions for WebSocket connections (maintain user-to-instance mapping)
+- Routes `/api/*` to API service and `/socket/*` to WebSocket service
+- Automatically removes unhealthy targets from routing pool
+
+### Storage Services
+
+**Amazon S3 (Simple Storage Service)**
+- Object storage for document content and frontend static files
+- Document versioning enabled for content recovery
+- Separate buckets: frontend assets and document storage
+- Lifecycle policies for cost optimization (archival to Glacier)
+- 99.999999999% (11 9's) durability
+
+**Amazon RDS (Relational Database Service) - PostgreSQL**
+- Managed PostgreSQL database for structured data (users, documents, permissions)
+- Multi-AZ deployment with automatic failover (60 second RTO)
+- Automated backups with 7-day retention
+- Point-in-time recovery for disaster recovery
+- Automatic minor version patches and maintenance
+
+**Amazon ElastiCache - Redis**
+- In-memory data store for three purposes:
+  - Session caching (JWT token validation)
+  - Rate limiting (prevent API abuse)
+  - Pub/Sub messaging (WebSocket message broadcasting)
+- Cluster mode with 2+ nodes for redundancy
+- Automatic failover in ~15 seconds
+- Sub-millisecond latency for cache operations
+
+### Networking & Content Delivery
+
+**Amazon VPC (Virtual Private Cloud)**
+- Isolated network with CIDR block 10.0.0.0/16
+- Public subnets (for ALB, NAT Gateway) in 2 AZs
+- Private subnets (for ECS tasks, RDS, ElastiCache) in 2 AZs
+- Internet Gateway for outbound internet access
+- NAT Gateway for private subnet internet access
+
+**Amazon CloudFront**
+- Global Content Delivery Network (CDN) with 400+ edge locations
+- Caches frontend static assets close to users
+- Reduces latency from 100-300ms to 10-50ms globally
+- Automatic DDoS protection with AWS Shield Standard
+- Custom error pages and cache behaviors
+
+### Security Services
+
+**AWS IAM (Identity and Access Management)**
+- ECS Task Roles for service-to-service authentication
+- Principle of least privilege (only required permissions)
+- No hardcoded credentials in application code
+- Cross-service access control (ECS → S3, RDS, Secrets Manager)
+
+**AWS Secrets Manager**
+- Encrypted storage for sensitive data:
+  - JWT secret for token generation
+  - Database master password
+- Automatic rotation capability
+- Integrated with ECS for runtime secret injection
+- Encryption at rest with KMS
+
+**Security Groups**
+- Virtual firewalls controlling traffic between services:
+  - ALB → ECS tasks (ports 3000, 3001)
+  - ECS tasks → RDS (port 5432)
+  - ECS tasks → ElastiCache (port 6379)
+- Stateful inspection (automatic return traffic)
+- Deny-by-default with explicit allow rules
+
+**AWS Certificate Manager (ACM)** (Optional)
+- Free SSL/TLS certificates for HTTPS
+- Automatic renewal (no manual intervention)
+- Integration with ALB and CloudFront
+
+### Monitoring & Operations
+
+**Amazon CloudWatch**
+- **Metrics**: CPU, Memory, Request Count, Response Time, Database connections
+- **Logs**: Centralized logging from ECS tasks (/ecs/codesync-*)
+- **Dashboards**: Visual representation of 10+ key metrics
+- **Alarms**: 9 configured alarms with SNS notifications
+  - High CPU/Memory (ECS, RDS, Redis)
+  - High response time or 5XX errors (ALB)
+  - Low disk space (RDS)
+  - Unhealthy host count (ALB)
+
+**Amazon SNS (Simple Notification Service)**
+- Email notifications when CloudWatch alarms trigger
+- Configured for alert escalation
+- Multi-subscriber support (email, SMS, Lambda)
+
+**Amazon ECR (Elastic Container Registry)**
+- Private Docker image registry
+- Stores codesync-api and codesync-websocket images
+- Integration with ECS for automatic image pulls
+- Image scanning for security vulnerabilities
+
+### Infrastructure as Code
+
+**Terraform**
+- Declarative infrastructure provisioning
+- Modular design (10 separate modules: VPC, security, database, cache, storage, ALB, ECS cluster, ECS service, CloudFront, monitoring)
+- State management for tracking infrastructure changes
+- Repeatable deployments across environments (dev/staging/prod)
+- Complete infrastructure deployed in ~20 minutes
+
+### Cloud Architecture Benefits
+
+**High Availability:**
+- Multi-AZ deployment eliminates single points of failure
+- Automatic failover for RDS, ElastiCache, and ECS tasks
+- Target: 99.99% uptime (52 minutes downtime/year)
+
+**Scalability:**
+- Horizontal scaling: ECS tasks scale from 2 to 10+ based on demand
+- Vertical scaling: Easy instance type upgrades (db.t3.micro → db.t3.large)
+- Auto-scaling policies respond within 1-2 minutes
+
+**Cost Efficiency:**
+- Pay-per-use pricing (no upfront costs)
+- Auto-scaling reduces costs during low traffic (60% savings)
+- Fargate eliminates EC2 management overhead
+- Development environment: ~$50-100/month
+
+**Security:**
+- Multiple security layers (network, application, data)
+- Encryption at rest (RDS, S3) and in transit (TLS/SSL)
+- Private subnets isolate application and data tiers
+- No public internet access to databases
+
+**Resilience:**
+- Automated backups and point-in-time recovery
+- Health checks with automatic recovery
+- Data replication across availability zones
+- Disaster recovery capability
+
 ## 🔍 How It Works
 
 ### System Architecture
