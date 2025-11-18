@@ -1,0 +1,46 @@
+# Example Terraform Variables
+# Copy this file to terraform.tfvars and fill in your values
+
+# General
+aws_region   = "us-east-1"
+project_name = "codesync"
+environment  = "dev"
+
+# Network
+vpc_cidr           = "10.0.0.0/16"
+availability_zones = ["us-east-1a", "us-east-1b"]
+
+# Database
+db_username          = "codesync_admin"
+db_instance_class    = "db.t3.micro"
+db_allocated_storage = 20
+multi_az             = true
+
+# Cache
+redis_node_type = "cache.t3.micro"
+redis_num_nodes = 2
+
+# API Service
+api_cpu           = 512
+api_memory        = 1024
+api_desired_count = 2
+api_min_capacity  = 2
+api_max_capacity  = 10
+
+# WebSocket Service
+websocket_cpu           = 512
+websocket_memory        = 1024
+websocket_desired_count = 2
+websocket_min_capacity  = 2
+websocket_max_capacity  = 10
+
+# SSL/TLS (Optional - comment out if not using custom domain)
+# certificate_arn           = "arn:aws:acm:us-east-1:ACCOUNT_ID:certificate/CERT_ID"
+# cloudfront_certificate_arn = "arn:aws:acm:us-east-1:ACCOUNT_ID:certificate/CERT_ID"
+
+# Secrets - You must create these in AWS Secrets Manager first
+jwt_secret_arn = "arn:aws:secretsmanager:us-east-1:ACCOUNT_ID:secret:codesync/jwt-secret-XXXXX"
+
+# Monitoring
+alert_email = "your-email@example.com"
+
