@@ -2,150 +2,22 @@
 
 A production-ready, real-time collaborative code editor built with modern web technologies and deployed on AWS with a resilient, scalable infrastructure.
 
-## 🏗️ Cloud Architecture Overview
+## 🏗️ Architecture Overview
 
-### AWS Cloud Services Utilized
+**Tech Stack:**
+- **Frontend**: React + TypeScript + Monaco Editor
+- **Backend API**: Node.js + Express + PostgreSQL
+- **WebSocket Service**: Node.js + Socket.io + Redis
+- **Infrastructure**: AWS (ECS Fargate, RDS, ElastiCache, S3, CloudFront, ALB)
+- **IaC**: Terraform
 
-**Compute & Orchestration:**
-- **ECS Fargate**: Serverless container orchestration (eliminates server management)
-- **Application Load Balancer (ALB)**: Layer 7 load balancing with health checks and sticky sessions
-- **Auto Scaling**: Dynamic scaling based on CloudWatch metrics (CPU/Memory)
-
-**Storage:**
-- **S3**: Object storage for document content with versioning and lifecycle policies
-- **RDS PostgreSQL**: Managed relational database with Multi-AZ for high availability
-- **ElastiCache Redis**: In-memory cache for sessions, rate limiting, and pub/sub messaging
-
-**Networking & Content Delivery:**
-- **VPC**: Isolated network with public/private subnets across 2 AZs
-- **CloudFront**: Global CDN with edge locations for low-latency content delivery
-- **Route 53** (optional): DNS management for custom domains
-
-**Security & Compliance:**
-- **IAM Roles**: Service-to-service authentication without credentials
-- **Security Groups**: Stateful firewall rules controlling traffic between services
-- **Secrets Manager**: Encrypted storage for sensitive data (JWT secret, DB passwords)
-- **ACM** (optional): SSL/TLS certificates for HTTPS
-
-**Monitoring & Operations:**
-- **CloudWatch**: Metrics, logs, dashboards, and alarms
-- **SNS**: Email/SMS notifications for infrastructure alerts
-- **CloudWatch Logs**: Centralized logging with retention policies
-
-**Infrastructure as Code:**
-- **Terraform**: Declarative infrastructure provisioning with state management
-- **ECR**: Docker container registry for application images
+**Key Features:**
+- ✅ Auto-scaling ECS services based on CPU and memory
+- ✅ Health checks, automatic failover, and self-healing
+- ✅ Multi-AZ deployment with eliminated SPOFs
+- ✅ CloudFront CDN, Redis caching, connection pooling
 
 ![Infrastructure Architecture Diagram](images/Infrastructure%20Architecture%20Diagram.png)
-
-### Cloud Architecture Principles
-
-**1. Elasticity & Scalability**
-- **Horizontal Scaling**: ECS tasks scale from 2 to 10+ based on demand
-- **Auto Scaling Policies**: 
-  - Scale out when CPU > 70% or Memory > 80%
-  - Scale in when CPU < 30% for 5 minutes
-- **Serverless Compute**: Fargate eliminates capacity planning
-- **Database Scaling**: RDS read replicas (future) for read-heavy workloads
-
-**2. High Availability & Fault Tolerance**
-- **Multi-AZ Deployment**: Resources distributed across 2 availability zones
-- **No Single Points of Failure**:
-  - ✅ ALB spans multiple AZs with cross-zone load balancing
-  - ✅ ECS tasks run in multiple AZs with automatic replacement
-  - ✅ RDS Multi-AZ with synchronous replication (RPO = 0)
-  - ✅ ElastiCache cluster mode with automatic failover
-  - ✅ S3 11 9's durability with cross-region replication (optional)
-- **Automatic Failover**: 
-  - RDS failover: ~60 seconds
-  - ECS task replacement: ~30 seconds
-  - ElastiCache failover: ~15 seconds
-
-**3. Reliability & Self-Healing**
-- **Health Checks**: ALB health checks every 30s, 2 consecutive failures = unhealthy
-- **Auto-Recovery**: ECS automatically replaces failed tasks
-- **Backup & Restore**: 
-  - RDS automated backups (7-day retention)
-  - S3 versioning for document recovery
-  - Point-in-time recovery for RDS
-
-**4. Security by Design**
-- **Defense in Depth**: Multiple security layers (network, application, data)
-- **Least Privilege**: IAM roles with minimum required permissions
-- **Encryption**: 
-  - At rest: RDS encryption, S3 encryption (AES-256)
-  - In transit: TLS/SSL for all communications
-- **Network Isolation**: 
-  - Public subnet: ALB, NAT Gateway
-  - Private subnet: ECS tasks, RDS, ElastiCache
-  - No direct internet access to application/data tiers
-
-**5. Performance Optimization**
-- **Global CDN**: CloudFront edge locations reduce latency (10-50ms vs 100-300ms)
-- **Caching Strategy**:
-  - CloudFront: Static assets (1 hour TTL)
-  - Redis: Session data, frequently accessed documents
-  - Connection pooling: Reduce database connection overhead
-- **Regional Proximity**: All resources in same region minimize inter-service latency
-
-**6. Cost Optimization**
-- **Fargate Spot** (optional): Up to 70% savings for non-critical workloads
-- **Right-sizing**: t3.micro instances for dev (upgradeable to t3.medium/large for prod)
-- **S3 Lifecycle Policies**: Move old documents to Glacier (not implemented yet)
-- **Auto Scaling**: Pay only for capacity needed during peak hours
-- **Reserved Instances** (future): 1-3 year commitments for 40-60% RDS savings
-
-**7. Operational Excellence**
-- **Infrastructure as Code**: Terraform modules for repeatable deployments
-- **Immutable Infrastructure**: Container updates via new task definitions
-- **Monitoring & Observability**: CloudWatch dashboards with 10+ metrics
-- **Automated Alerts**: SNS notifications for 9 critical alarms
-- **Blue-Green Deployments** (capability): Zero-downtime updates via ECS
-
-### Cloud Design Patterns Implemented
-
-**1. Load Balancing Pattern**
-- ALB distributes traffic across healthy ECS tasks
-- Sticky sessions for WebSocket connections
-
-**2. Cache-Aside Pattern**
-- Check Redis cache before PostgreSQL queries
-- Write-through caching for frequently accessed data
-
-**3. Circuit Breaker Pattern**
-- Health checks prevent routing to unhealthy instances
-- Automatic service degradation
-
-**4. Publisher-Subscriber Pattern**
-- Redis Pub/Sub for real-time message broadcasting
-- Decouples WebSocket instances
-
-**5. Strangler Fig Pattern (future-ready)**
-- Modular Terraform design allows gradual migration
-- Service-oriented architecture enables independent updates
-
-### Key Cloud Computing Benefits Achieved
-
-**Compared to Traditional On-Premise Deployment:**
-
-| Aspect | Traditional On-Premise | AWS Cloud (This Project) |
-|--------|----------------------|--------------------------|
-| **Initial Setup Time** | Weeks (hardware procurement) | 20 minutes (terraform apply) |
-| **Scaling** | Manual, requires new hardware | Automatic based on demand |
-| **High Availability** | Requires expensive redundant hardware | Multi-AZ built-in, pay for usage |
-| **Disaster Recovery** | Complex, manual failover | Automatic failover (60s RDS, 30s ECS) |
-| **Monitoring** | Third-party tools, manual setup | CloudWatch integrated, real-time |
-| **Security Updates** | Manual patching, downtime required | Managed services auto-patch |
-| **Geographic Distribution** | Multiple data centers required | CloudFront global edge network |
-| **Cost Model** | High CapEx, fixed costs | Pay-as-you-go OpEx, scales with usage |
-| **Backup & Recovery** | Manual, tape backups | Automated, point-in-time recovery |
-
-**Quantifiable Benefits:**
-- **99.99% Availability**: Multi-AZ architecture provides 52 minutes downtime/year vs hours/days on-premise
-- **Global Latency**: CloudFront CDN serves content from nearest edge location (10-50ms vs 100-300ms)
-- **Auto-Scaling ROI**: Scale from 2 to 10 instances during peak, back to 2 during off-peak (save 60% compute costs)
-- **Zero Infrastructure Management**: Fargate, RDS, ElastiCache are fully managed (save 40+ hours/month ops time)
-- **Instant Provisioning**: Deploy new environment in 20 minutes vs weeks for physical infrastructure
 
 ## 🔍 How It Works
 
@@ -408,20 +280,6 @@ curl http://$ALB_DNS/socket/health
 aws logs tail /ecs/codesync-dev-api --follow
 aws logs tail /ecs/codesync-dev-websocket --follow
 ```
-
-## 🧪 Application Usage
-
-### User Registration & Login
-
-![User Registration & Login Flow](images/User%20Registration%20%26%20Login%20Flow.png)
-
-### Create & Join Documents
-
-![Create & Join Collaborative Document](images/Create%20%26%20Join%20Collaborative%20Document.png)
-
-### Real-Time Collaboration
-
-![Real-Time Collaborative Editing](images/Real-Time%20Collaborative%20Editing.png)
 
 ## 🔄 Updates
 
