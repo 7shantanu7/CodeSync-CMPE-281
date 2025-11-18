@@ -19,6 +19,146 @@ A production-ready, real-time collaborative code editor built with modern web te
 
 ![Infrastructure Architecture Diagram](images/Infrastructure%20Architecture%20Diagram.png)
 
+## 🔍 How It Works
+
+### System Architecture
+
+CodeSync is a distributed, real-time collaborative code editor with three main service layers:
+
+**1. Frontend Layer (React + CloudFront)**
+- Single-page React application with Monaco Editor for code editing
+- Hosted on S3 and distributed globally via CloudFront CDN
+- Communicates with backend via REST APIs and WebSocket connections
+- Handles authentication, document management, and real-time collaboration UI
+
+**2. Application Layer (ECS Fargate)**
+- **API Service**: Handles REST operations (auth, CRUD for documents/users)
+  - User registration and JWT-based authentication
+  - Document creation, retrieval, and access control
+  - Stores document metadata in PostgreSQL
+  - Stores document content in S3 for persistence
+  - Uses Redis for session caching and rate limiting
+
+- **WebSocket Service**: Manages real-time collaboration
+  - Maintains persistent connections with active users
+  - Broadcasts code changes to all users editing the same document
+  - Uses Redis Pub/Sub for message distribution across multiple instances
+  - Tracks active users and cursor positions in real-time
+
+**3. Data Layer**
+- **PostgreSQL (RDS)**: Stores users, documents, permissions
+- **Redis (ElastiCache)**: Session cache, rate limiting, WebSocket pub/sub
+- **S3**: Document content storage with versioning enabled
+
+### User Flow
+
+**1. Registration & Login**
+- User visits CloudFront URL and navigates to registration page
+- Enters email and password → API validates and creates account in PostgreSQL
+- On login, API generates JWT token (stored in Redis for fast validation)
+- Token stored in browser localStorage for subsequent requests
+
+![User Registration & Login Flow](images/User%20Registration%20%26%20Login%20Flow.png)
+
+**2. Dashboard & Document Management**
+- User lands on dashboard showing their documents
+- API fetches user's document list from PostgreSQL
+- User can:
+  - Create new document (metadata saved to PostgreSQL)
+  - Open existing document (content loaded from S3)
+  - Share document with collaborators (permissions stored in PostgreSQL)
+  - Delete document (removed from PostgreSQL and S3)
+
+![Create & Join Collaborative Document](images/Create%20%26%20Join%20Collaborative%20Document.png)
+
+**3. Real-Time Collaborative Editing**
+- User opens document → API loads content from S3, metadata from PostgreSQL
+- Frontend initializes Monaco Editor with document content
+- WebSocket connection established with authentication token
+- User joins document "room" with other active collaborators
+
+**During Collaboration:**
+- **User A types** → Change sent via WebSocket → Redis Pub/Sub broadcasts to all WebSocket instances
+- **User B receives update** → Operational Transformation merges changes → UI updates instantly
+- **Active users displayed** → WebSocket tracks and shows who's editing (with cursor positions)
+- **Auto-save** → Periodic snapshots written to S3 every few seconds
+
+**Conflict Resolution:**
+- Multiple simultaneous edits handled by Operational Transformation (OT) algorithm
+- Character insertions/deletions transformed to maintain consistency
+- Each client maintains document version number for synchronization
+
+![Real-Time Collaborative Editing](images/Real-Time%20Collaborative%20Editing.png)
+
+**4. Connection Resilience**
+- Network interruption → WebSocket reconnects automatically
+- On reconnect → Client syncs missed changes from Redis cache
+- Sticky sessions (ALB) ensure user reconnects to same WebSocket instance
+- If instance down → ALB routes to healthy instance, state recovered from Redis
+
+### Technical Request Flow
+
+**User Authentication:**
+1. User submits credentials → CloudFront → ALB → API Service
+2. API validates against PostgreSQL
+3. JWT token generated and cached in Redis (TTL: 24 hours)
+4. Token returned to client and stored in localStorage
+
+**Document Collaboration:**
+1. User requests document via API (JWT in Authorization header)
+2. API fetches metadata from PostgreSQL, content from S3
+3. Frontend establishes WebSocket connection (JWT sent on connection)
+4. WebSocket service validates token (checks Redis cache)
+5. User joins document room, receives list of active collaborators
+6. User edits trigger WebSocket events → Redis Pub/Sub → all connected clients
+7. Periodic snapshots (every 5s) saved to S3 for durability
+
+**Real-Time Synchronization:**
+- Operational Transformation (OT) handles concurrent edits
+- Redis Pub/Sub ensures message delivery across WebSocket instances
+- Sticky sessions (ALB) keep users connected to same WebSocket instance
+- WebSocket heartbeat (30s) detects disconnections
+- Automatic reconnection with exponential backoff (1s, 2s, 4s, 8s, 16s max)
+
+### High Availability & Resilience
+
+**Eliminated Single Points of Failure:**
+1. **Multi-AZ Deployment**: All services span 2 availability zones
+2. **Auto-Scaling**: ECS tasks scale 2-10+ based on CPU/memory
+3. **Database Failover**: RDS Multi-AZ with automatic failover (~60s)
+4. **Cache Redundancy**: ElastiCache cluster with 2+ nodes
+5. **Load Balancing**: ALB distributes traffic with health checks
+
+**Auto-Recovery Mechanisms:**
+- ECS health checks restart unhealthy tasks
+- ALB removes unhealthy targets from routing
+- RDS automatic backups with point-in-time recovery
+- CloudWatch alarms trigger SNS notifications
+
+**Performance Optimizations:**
+- CloudFront edge caching for static assets (TTL: 1 hour)
+- Redis caching for sessions and frequently accessed data
+- Connection pooling for database connections
+- Gzip compression on API responses
+
+### Security
+
+**Authentication & Authorization:**
+- JWT tokens with expiration (stored in Redis for revocation)
+- Password hashing with bcrypt
+- Document-level access control (owner, collaborators)
+
+**Network Security:**
+- VPC isolation with public/private subnets
+- Security groups restrict traffic between services
+- ALB terminates SSL (optional ACM certificates)
+- S3 buckets private with pre-signed URLs for access
+
+**Secrets Management:**
+- AWS Secrets Manager for JWT secret and DB password
+- No hardcoded credentials in code or containers
+- IAM roles for service-to-service authentication
+
 ## 📋 Prerequisites
 
 - AWS Account with appropriate permissions
