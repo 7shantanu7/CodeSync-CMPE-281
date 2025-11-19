@@ -1,4 +1,5 @@
 # CodeSync - Real-Time Collaborative Code Editor
+Repo Link: [https://github.com/7shantanu7/CodeSync-CMPE-281](https://github.com/7shantanu7/CodeSync-CMPE-281)
 
 A production-ready, real-time collaborative code editor built with modern web technologies and deployed on AWS with a resilient, scalable infrastructure.
 
