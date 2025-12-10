@@ -169,3 +169,195 @@ resource "aws_elasticache_subnet_group" "main" {
   }
 }
 
+# Secure Design Iteration: Network Segmentation - Network ACLs
+# Added NACLs as additional layer of network security (defense in depth)
+# NACLs are stateless and operate at subnet level
+
+# NACL for Public Subnets
+resource "aws_network_acl" "public" {
+  vpc_id     = aws_vpc.main.id
+  subnet_ids = aws_subnet.public[*].id
+
+  ingress {
+    protocol   = "tcp"
+    rule_no    = 100
+    action     = "allow"
+    cidr_block = "0.0.0.0/0"
+    from_port  = 80
+    to_port    = 80
+  }
+
+  ingress {
+    protocol   = "tcp"
+    rule_no    = 110
+    action     = "allow"
+    cidr_block = "0.0.0.0/0"
+    from_port  = 443
+    to_port    = 443
+  }
+
+  ingress {
+    protocol   = "tcp"
+    rule_no    = 200
+    action     = "allow"
+    cidr_block = "0.0.0.0/0"
+    from_port  = 1024
+    to_port    = 65535
+  }
+
+  egress {
+    protocol   = "tcp"
+    rule_no    = 100
+    action     = "allow"
+    cidr_block = var.vpc_cidr
+    from_port  = 3000
+    to_port    = 3001
+  }
+
+  egress {
+    protocol   = "tcp"
+    rule_no    = 200
+    action     = "allow"
+    cidr_block = "0.0.0.0/0"
+    from_port  = 1024
+    to_port    = 65535
+  }
+
+  tags = {
+    Name = "${var.project_name}-${var.environment}-public-nacl"
+  }
+}
+
+# NACL for Private Subnets
+resource "aws_network_acl" "private" {
+  vpc_id     = aws_vpc.main.id
+  subnet_ids = aws_subnet.private[*].id
+
+  ingress {
+    protocol   = "tcp"
+    rule_no    = 100
+    action     = "allow"
+    cidr_block = var.vpc_cidr
+    from_port  = 3000
+    to_port    = 3001
+  }
+
+  ingress {
+    protocol   = "tcp"
+    rule_no    = 200
+    action     = "allow"
+    cidr_block = "0.0.0.0/0"
+    from_port  = 1024
+    to_port    = 65535
+  }
+
+  egress {
+    protocol   = "tcp"
+    rule_no    = 100
+    action     = "allow"
+    cidr_block = var.vpc_cidr
+    from_port  = 5432
+    to_port    = 5432
+  }
+
+  egress {
+    protocol   = "tcp"
+    rule_no    = 110
+    action     = "allow"
+    cidr_block = var.vpc_cidr
+    from_port  = 6379
+    to_port    = 6379
+  }
+
+  egress {
+    protocol   = "tcp"
+    rule_no    = 120
+    action     = "allow"
+    cidr_block = "0.0.0.0/0"
+    from_port  = 443
+    to_port    = 443
+  }
+
+  egress {
+    protocol   = "udp"
+    rule_no    = 130
+    action     = "allow"
+    cidr_block = "0.0.0.0/0"
+    from_port  = 53
+    to_port    = 53
+  }
+
+  egress {
+    protocol   = "tcp"
+    rule_no    = 200
+    action     = "allow"
+    cidr_block = "0.0.0.0/0"
+    from_port  = 1024
+    to_port    = 65535
+  }
+
+  tags = {
+    Name = "${var.project_name}-${var.environment}-private-nacl"
+  }
+}
+
+# Secure Design Iteration: Network Segmentation - Database NACL
+# Most restrictive - only allows PostgreSQL (5432) from VPC, blocks internet access
+resource "aws_network_acl" "database" {
+  vpc_id     = aws_vpc.main.id
+  subnet_ids = aws_subnet.database[*].id
+
+  ingress {
+    protocol   = "tcp"
+    rule_no    = 100
+    action     = "allow"
+    cidr_block = var.vpc_cidr
+    from_port  = 5432
+    to_port    = 5432
+  }
+
+  egress {
+    protocol   = "tcp"
+    rule_no    = 100
+    action     = "allow"
+    cidr_block = var.vpc_cidr
+    from_port  = 1024
+    to_port    = 65535
+  }
+
+  tags = {
+    Name = "${var.project_name}-${var.environment}-database-nacl"
+  }
+}
+
+# Secure Design Iteration: Network Segmentation - Cache NACL
+# Most restrictive - only allows Redis (6379) from VPC, blocks internet access
+resource "aws_network_acl" "cache" {
+  vpc_id     = aws_vpc.main.id
+  subnet_ids = aws_subnet.cache[*].id
+
+  ingress {
+    protocol   = "tcp"
+    rule_no    = 100
+    action     = "allow"
+    cidr_block = var.vpc_cidr
+    from_port  = 6379
+    to_port    = 6379
+  }
+
+  egress {
+    protocol   = "tcp"
+    rule_no    = 100
+    action     = "allow"
+    cidr_block = var.vpc_cidr
+    from_port  = 1024
+    to_port    = 65535
+  }
+
+  tags = {
+    Name = "${var.project_name}-${var.environment}-cache-nacl"
+  }
+}
+
+
+

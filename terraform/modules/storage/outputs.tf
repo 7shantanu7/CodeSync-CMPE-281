@@ -28,8 +28,22 @@ output "documents_bucket_name" {
   value       = aws_s3_bucket.documents.bucket
 }
 
+# Secure Design Iteration: Output bucket ARNs for least privilege IAM policies
+# Needed to pass specific bucket ARNs instead of using wildcards
+output "documents_bucket_arn" {
+  description = "Documents bucket ARN"
+  value       = aws_s3_bucket.documents.arn
+}
+
 output "backups_bucket_name" {
   description = "Backups bucket name"
   value       = aws_s3_bucket.backups.bucket
 }
+
+output "backups_bucket_arn" {
+  description = "Backups bucket ARN"
+  value       = aws_s3_bucket.backups.arn
+}
+
+
 

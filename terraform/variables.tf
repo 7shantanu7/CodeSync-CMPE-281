@@ -157,3 +157,19 @@ variable "alert_email" {
   type        = string
 }
 
+# Secure Design Iteration: Resource Tagging - Owner tag for accountability
+variable "owner" {
+  description = "Owner of the resources"
+  type        = string
+  default     = "Shantanu Zadbuke"
+}
+
+# Secure Design Iteration: Resource Tagging - CostCenter tag for billing and chargeback
+variable "cost_center" {
+  description = "Cost center for billing"
+  type        = string
+  default     = "Engineering"
+}
+
+
+

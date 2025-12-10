@@ -106,3 +106,33 @@ variable "secrets" {
   default     = {}
 }
 
+# Secure Design Iteration: Variables for least privilege S3 access
+# Allows specifying exact bucket ARNs instead of wildcards
+variable "s3_bucket_arns" {
+  description = "List of S3 bucket ARNs the service can access"
+  type        = list(string)
+  default     = []
+}
+
+# Secure Design Iteration: Allows different services to have different S3 permissions
+# API service can write, WebSocket service is read-only
+variable "s3_allowed_actions" {
+  description = "List of S3 actions allowed"
+  type        = list(string)
+  default     = ["s3:GetObject", "s3:PutObject"]
+}
+
+variable "owner" {
+  description = "Owner of the resources"
+  type        = string
+  default     = "DevOps"
+}
+
+variable "cost_center" {
+  description = "Cost center for billing"
+  type        = string
+  default     = "Engineering"
+}
+
+
+

@@ -1,4 +1,4 @@
-# CodeSync Infrastructure - Main Configuration
+# CodeSync Infrastructure
 
 terraform {
   required_version = ">= 1.0"
@@ -10,8 +10,6 @@ terraform {
     }
   }
   
-  # Backend configuration for state management
-  # Uncomment and configure for production use
   # backend "s3" {
   #   bucket         = "codesync-terraform-state"
   #   key            = "infrastructure/terraform.tfstate"
@@ -21,16 +19,151 @@ terraform {
   # }
 }
 
+# Secure Design Iteration: Resource Tagging Enforcement
+# Added mandatory tags (Owner, CostCenter) for governance and accountability
+# All resources automatically get these tags via provider default_tags
+locals {
+  mandatory_tags = {
+    Project     = var.project_name
+    Environment = var.environment
+    Owner       = var.owner
+    CostCenter  = var.cost_center
+    ManagedBy   = "Terraform"
+  }
+}
+
 provider "aws" {
   region = var.aws_region
   
   default_tags {
-    tags = {
-      Project     = "CodeSync"
-      Environment = var.environment
-      ManagedBy   = "Terraform"
-    }
+    tags = local.mandatory_tags
   }
+}
+
+# Secure Design Iteration: AWS Config Rule for Tag Enforcement
+# Automatically checks that all resources have required tags (Project, Environment, Owner, ManagedBy)
+# Non-compliant resources are flagged in AWS Config
+resource "aws_config_config_rule" "required_tags" {
+  name        = "${var.project_name}-${var.environment}-required-tags"
+  description = "Checks whether resources have the required tags"
+
+  source {
+    owner             = "AWS"
+    source_identifier = "REQUIRED_TAGS"
+  }
+
+  input_parameters = jsonencode({
+    tag1Key   = "Project"
+    tag2Key   = "Environment"
+    tag3Key   = "Owner"
+    tag4Key   = "ManagedBy"
+  })
+
+  scope {
+    compliance_resource_types = [
+      "AWS::EC2::Instance",
+      "AWS::EC2::SecurityGroup",
+      "AWS::EC2::Subnet",
+      "AWS::EC2::VPC",
+      "AWS::RDS::DBInstance",
+      "AWS::ElastiCache::CacheCluster",
+      "AWS::S3::Bucket",
+      "AWS::ECS::Cluster",
+      "AWS::ECS::Service",
+      "AWS::ElasticLoadBalancingV2::LoadBalancer"
+    ]
+  }
+
+  tags = {
+    Name = "${var.project_name}-${var.environment}-required-tags-rule"
+  }
+
+}
+
+resource "aws_config_configuration_recorder" "main" {
+  name     = "${var.project_name}-${var.environment}-config-recorder"
+  role_arn = aws_iam_role.config_role.arn
+
+  recording_group {
+    all_supported                 = false
+    include_global_resource_types = false
+    resource_types = [
+      "AWS::EC2::SecurityGroup",
+      "AWS::EC2::Subnet",
+      "AWS::EC2::VPC",
+      "AWS::RDS::DBInstance",
+      "AWS::S3::Bucket",
+      "AWS::ECS::Cluster",
+      "AWS::ECS::Service"
+    ]
+  }
+}
+
+resource "aws_config_configuration_recorder_status" "main" {
+  name       = aws_config_configuration_recorder.main.name
+  is_enabled = true
+  depends_on = [aws_config_delivery_channel.main]
+}
+
+resource "aws_config_delivery_channel" "main" {
+  name           = "${var.project_name}-${var.environment}-config-delivery"
+  s3_bucket_name = module.storage.backups_bucket_name
+  s3_key_prefix  = "aws-config"
+
+  depends_on = [aws_config_configuration_recorder.main]
+}
+
+# IAM Role for AWS Config
+resource "aws_iam_role" "config_role" {
+  name_prefix = "${var.project_name}-${var.environment}-config-"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "config.amazonaws.com"
+        }
+      }
+    ]
+  })
+
+  tags = {
+    Name = "${var.project_name}-${var.environment}-config-role"
+  }
+}
+
+resource "aws_iam_role_policy_attachment" "config_policy" {
+  role       = aws_iam_role.config_role.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWS_ConfigRole"
+}
+
+resource "aws_iam_role_policy" "config_s3_policy" {
+  name = "config-s3-delivery"
+  role = aws_iam_role.config_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:PutObject",
+          "s3:PutObjectAcl"
+        ]
+        Resource = "${module.storage.backups_bucket_arn}/aws-config/*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:GetBucketAcl"
+        ]
+        Resource = module.storage.backups_bucket_arn
+      }
+    ]
+  })
 }
 
 # VPC and Networking
@@ -151,11 +284,22 @@ module "api_service" {
     AWS_REGION         = var.aws_region
   }
   
-  # Secrets
   secrets = {
     DB_PASSWORD = module.database.db_password_secret_arn
     JWT_SECRET  = var.jwt_secret_arn
   }
+  
+  # Secure Design Iteration: Least Privilege - Specific S3 bucket ARN instead of wildcard
+  s3_bucket_arns = [module.storage.documents_bucket_arn]
+  s3_allowed_actions = [
+    "s3:GetObject",
+    "s3:PutObject",
+    "s3:DeleteObject"
+  ]
+  
+  # Secure Design Iteration: Resource Tagging - Owner and CostCenter for governance
+  owner       = var.owner
+  cost_center = var.cost_center
 }
 
 # WebSocket Service
@@ -199,11 +343,20 @@ module "websocket_service" {
     AWS_REGION         = var.aws_region
   }
   
-  # Secrets
   secrets = {
     DB_PASSWORD = module.database.db_password_secret_arn
     JWT_SECRET  = var.jwt_secret_arn
   }
+  
+  # Secure Design Iteration: Least Privilege - WebSocket service has read-only S3 access
+  s3_bucket_arns = [module.storage.documents_bucket_arn]
+  s3_allowed_actions = [
+    "s3:GetObject"
+  ]
+  
+  # Secure Design Iteration: Resource Tagging - Owner and CostCenter for governance
+  owner       = var.owner
+  cost_center = var.cost_center
 }
 
 # CloudFront for Frontend
